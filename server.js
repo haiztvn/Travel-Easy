@@ -29,7 +29,7 @@ const db = mysql.createConnection({
   host: "gamehay.id.vn",//s103d190-u2.interdata.vn
   user: "ndbdxcjw_doanchuyennganh",
   password: "YcuDSH8P5nWaxGuzYebR", // Thay bằng biến môi trường
-  database: "doanchuyennganh",
+  database: "ndbdxcjw_doanchuyennganh",
 });
 // Kết nối tới MySQL
 db.connect((err) => {
