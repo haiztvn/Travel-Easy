@@ -26,7 +26,7 @@ app.use(bodyParser.json());
 //   database: "doanchuyennghanh",
 // });
 const db = mysql.createConnection({
-  host: "s103d190-u2.interdata.vn",//s103d190-u2.interdata.vn
+  host: "gamehay.id.vn",//s103d190-u2.interdata.vn
   user: "ndbdxcjw_doanchuyennganh",
   password: "YcuDSH8P5nWaxGuzYebR", // Thay bằng biến môi trường
   database: "doanchuyennganh",
