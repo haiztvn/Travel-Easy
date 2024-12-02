@@ -19,18 +19,18 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(bodyParser.json());
 
-const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "", // Thay bằng biến môi trường
-  database: "doanchuyennghanh",
-});
 // const db = mysql.createConnection({
-//   host: "s103d190-u2.interdata.vn",//s103d190-u2.interdata.vn
-//   user: "admin",
-//   password: "adminhh07102003", // Thay bằng biến môi trường
-//   database: "doanchuyennganh",
+//   host: "localhost",
+//   user: "root",
+//   password: "", // Thay bằng biến môi trường
+//   database: "doanchuyennghanh",
 // });
+const db = mysql.createConnection({
+  host: "s103d190-u2.interdata.vn",//s103d190-u2.interdata.vn
+  user: "ndbdxcjw_doanchuyennganh",
+  password: "YcuDSH8P5nWaxGuzYebR", // Thay bằng biến môi trường
+  database: "doanchuyennganh",
+});
 // Kết nối tới MySQL
 db.connect((err) => {
   if (err) {
