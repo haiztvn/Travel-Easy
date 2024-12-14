@@ -2,13 +2,15 @@ const express = require("express");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require("multer");
 const multerS3 = require("multer-s3");
-const mysql = require("mysql");
+const db = require('./config/db');
 const cron = require('node-cron');
 const bodyParser = require("body-parser");
 const jwt = require('jsonwebtoken');
 const bcrypt = require("bcryptjs");
 const cors = require("cors"); // Import middleware CORS
 require('dotenv').config();
+const crypto = require('crypto');
+
 const { OAuth2Client } = require("google-auth-library");
 const client = new OAuth2Client(process.env.REACT_APP_GOOGLE_CLIENT_ID);
 const secretKey = (process.env.REACT_APP_TOKEN);
@@ -18,27 +20,10 @@ const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
+// Tăng giới hạn kích thước yêu cầu
+app.use(express.json({ limit: '10mb' })); // Giới hạn tải lên là 10MB
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// const db = mysql.createConnection({
-//   host: "localhost",
-//   user: "root",
-//   password: "", // Thay bằng biến môi trường
-//   database: "doanchuyennghanh",
-// });
-const db = mysql.createConnection({
-  host: "gamehay.id.vn",//s103d190-u2.interdata.vn
-  user: "ndbdxcjw_doanchuyennganh",
-  password: "YcuDSH8P5nWaxGuzYebR", // Thay bằng biến môi trường
-  database: "ndbdxcjw_doanchuyennganh",
-});
-// Kết nối tới MySQL
-db.connect((err) => {
-  if (err) {
-    console.error("Lỗi kết nối đến cơ sở dữ liệu:", err);
-    return;
-  }
-  console.log("MySQL đã được kết nối...");
-});
 // Middleware kiểm tra token
 const authenticateJWT = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1]; // Lấy token từ header
@@ -369,6 +354,7 @@ app.post('/api/khachhang', (req, res) => {
     });
   });
 });
+
 app.put('/api/khachhang/:id', (req, res) => {
   const khachhangId = req.params.id;
   const { TenKH, SDT, DiaChi, NoiDung } = req.body;
@@ -392,7 +378,68 @@ app.put('/api/khachhang/:id', (req, res) => {
     // res.status(200).json({ message: 'Cập nhật khách hàng thành công' });
   });
 });
-///
+
+
+app.put('/api/khachhang-social', authenticateJWT, (req, res) => {
+  const userId = req.user.ID; // Lấy user ID từ JWT (khachhangId)
+
+  const { Twitter, Facebook, LinkedIn, Instagram } = req.body;
+
+  // Kiểm tra xem các thông tin mạng xã hội có tồn tại trong body hay không
+  if (!Twitter && !Facebook && !LinkedIn && !Instagram) {
+    return res.status(400).json({ error: 'Không có thông tin mạng xã hội nào để cập nhật' });
+  }
+
+  // Chỉ cập nhật các trường mạng xã hội nếu chúng có giá trị mới
+  const updateFields = [];
+  const updateValues = [];
+
+  if (Twitter) {
+    updateFields.push('Twitter = ?');
+    updateValues.push(Twitter);
+  }
+  if (Facebook) {
+    updateFields.push('Facebook = ?');
+    updateValues.push(Facebook);
+  }
+  if (LinkedIn) {
+    updateFields.push('LinkedIn = ?');
+    updateValues.push(LinkedIn);
+  }
+  if (Instagram) {
+    updateFields.push('Instagram = ?');
+    updateValues.push(Instagram);
+  }
+
+  // Truy vấn SQL để cập nhật thông tin mạng xã hội của khách hàng
+  const updateQuery = `
+  UPDATE khachhang
+  SET ${updateFields.join(', ')}
+  WHERE AccountID = ?  -- Sử dụng AccountID thay vì ID
+`;
+
+  // Đẩy userId vào cuối mảng giá trị (ID khách hàng)
+  updateValues.push(userId);
+
+  db.query(updateQuery, updateValues, (err, result) => {
+    if (err) {
+      console.error('Lỗi khi cập nhật khách hàng:', err);
+      return res.status(500).json({ error: 'Lỗi khi cập nhật thông tin khách hàng' });
+    }
+
+    // Kiểm tra xem có bản ghi nào được cập nhật không
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy thông tin khách hàng để cập nhật' });
+    }
+
+    res.status(200).json({ message: 'Cập nhật thông tin mạng xã hội thành công' });
+  });
+});
+
+
+
+
+
 app.get("/api/account", (req, res) => {
   // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
   db.query("SELECT * FROM account", (err, result) => {
@@ -416,9 +463,8 @@ app.get("/api/account/login", authenticateJWT, (req, res) => {
     }
   });
 });
-
 app.post("/api/account", (req, res) => {
-  const { AccountName, AccountPassword, Mail, Role } = req.body;
+  const { AccountName, AccountPassword, Mail, Role, ProfilePicture } = req.body;
 
   // Kiểm tra xem các trường có tồn tại không
   if (!AccountName || !AccountPassword || !Mail) {
@@ -445,9 +491,12 @@ app.post("/api/account", (req, res) => {
         return res.status(500).json({ error: "Lỗi khi mã hóa mật khẩu" });
       }
 
+      // Gán giá trị mặc định cho ProfilePicture nếu không có
+      const profilePic = ProfilePicture || 'https://s240-ava-talk.zadn.vn/e/a/c/d/0/240/1494d01fa267785b75ac2778750deb4a.jpg';
+
       // Lưu người dùng vào database
-      const insertAccountSql = "INSERT INTO account (AccountName, AccountPassword, Mail) VALUES (?, ?, ?)";
-      db.query(insertAccountSql, [AccountName, hashedPassword, Mail], (err, result) => {
+      const insertAccountSql = "INSERT INTO account (AccountName, AccountPassword, Mail, ProfilePicture) VALUES (?, ?, ?, ?)";
+      db.query(insertAccountSql, [AccountName, hashedPassword, Mail, profilePic], (err, result) => {
         if (err) {
           console.error("Lỗi khi lưu người dùng:", err);
           return res.status(500).json({ error: "Lỗi khi lưu người dùng" });
@@ -457,6 +506,118 @@ app.post("/api/account", (req, res) => {
     });
   });
 });
+
+
+app.post('/api/account/request-change-password', authenticateJWT, (req, res) => {
+  const userId = req.user.ID;
+  const userMail = req.user.Mail;
+  // Tạo mã reset ngẫu nhiên (token)
+  const token = crypto.randomBytes(3).toString('hex'); // Mã reset dài 6 ký tự
+  const expirationTime = new Date().getTime() + 60 * 1000; // Thời gian hết hạn là 10 phút sau
+  if (!userMail) return console.log('not');;
+  // Lưu mã reset vào cơ sở dữ liệu
+  db.query(
+    'UPDATE account SET reset_token = ?, reset_token_expiration = ? WHERE ID = ?',
+    [token, expirationTime, userId],
+    (err, result) => {
+      if (err) {
+        console.error('Error updating token:', err);
+        return res.status(500).json({ error: 'Error updating reset token' });
+      }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Trả mã reset về client để gửi email
+      res.json({
+        message: 'Reset code is generated. Please check your email.',
+        token,
+        userMail
+      });
+    }
+  );
+});
+
+app.post("/api/account/change-password", authenticateJWT, (req, res) => {
+  const userId = req.user.ID;
+  const { token, newPassword } = req.body;
+
+  // Check if the token and new password exist
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: "Cần cung cấp mã xác nhận và mật khẩu mới" });
+  }
+
+  // Fetch user account information
+  db.query("SELECT * FROM account WHERE ID = ?", [userId], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: "Lỗi khi lấy thông tin tài khoản" });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: "Tài khoản không tồn tại" });
+    }
+
+    const { reset_token, reset_token_expiration, auth_provider } = result[0];
+
+    // Check if the user is using Google login
+    if (auth_provider === "google") {
+      return res.status(400).json({ error: "Người dùng đăng nhập bằng Google không cần đổi mật khẩu" });
+    }
+
+    // Check if the token matches and has not expired
+    if (reset_token !== token) {
+      return res.status(400).json({ error: "Mã xác nhận không chính xác" });
+    }
+
+    if (new Date().getTime() > reset_token_expiration) {
+      return res.status(400).json({ error: "Mã xác nhận đã hết hạn" });
+    }
+
+    // Hash the new password and update in the database
+    bcrypt.hash(newPassword, 10, (err, hashedPassword) => {
+      if (err) {
+        return res.status(500).json({ error: "Lỗi khi mã hóa mật khẩu" });
+      }
+
+      db.query("UPDATE account SET AccountPassword = ? WHERE ID = ?", [hashedPassword, userId], (err, result) => {
+        if (err) {
+          return res.status(500).json({ error: "Lỗi khi cập nhật mật khẩu" });
+        }
+
+        res.json({ message: "Mật khẩu đã được thay đổi thành công" });
+      });
+    });
+  });
+});
+
+
+
+app.post('/api/account/upload-profile-picture', authenticateJWT, (req, res) => {
+  const userId = req.user.ID;
+
+  // Kiểm tra xem có file trong request không
+  if (!req.body.image) {
+    return res.status(400).json({ error: 'No image data provided' });
+  }
+
+  const base64Image = req.body.image;
+
+  // Kiểm tra xem chuỗi Base64 có hợp lệ không
+  const base64Pattern = /^data:image\/[a-z]+;base64,/;
+  if (!base64Pattern.test(base64Image)) {
+    return res.status(400).json({ error: 'Invalid Base64 image format' });
+  }
+
+  // Lưu chuỗi Base64 vào cơ sở dữ liệu
+  db.query('UPDATE account SET ProfilePicture = ? WHERE ID = ?', [base64Image, userId], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    res.json({ message: 'Profile picture updated successfully', base64Image });
+  });
+});
+
 // app.post("/api/login", (req, res) => {
 //   const { AccountName, AccountPassword, Role } = req.body;
 
@@ -503,7 +664,7 @@ app.post("/api/account", (req, res) => {
 // });
 
 app.post("/api/login", (req, res) => {
-  const { AccountName, AccountPassword, Role } = req.body;
+  const { AccountName, AccountPassword, Role, Mail } = req.body;
 
   if (!AccountName || !AccountPassword) {
     return res.status(400).json({ error: "Thiếu username hoặc password" });
@@ -538,7 +699,8 @@ app.post("/api/login", (req, res) => {
       const payload = {
         ID: user.ID,
         AccountName: user.AccountName,
-        Role: user.Role, // Thêm quyền hạn nếu cần thiết
+        Role: user.Role,
+        Mail: user.Mail,  // Thêm quyền hạn nếu cần thiết
       };
 
       const token = jwt.sign(payload, secretKey, { expiresIn: '5m' }); // Tạo token với thời gian sống 1 giờ
@@ -597,46 +759,71 @@ app.post('/api/google-auth', async (req, res) => {
         return res.status(500).json({ error: 'Lỗi server' });
       }
 
-      let user;
-
       if (results.length > 0) {
         // Tài khoản đã tồn tại
-        user = results[0];
-      } else {
-        // Tài khoản chưa tồn tại, tạo mới
-        const insertAccountSql = `
-          INSERT INTO account (AccountName, Mail, ProfilePicture)
-          VALUES (?, ?, ?)
-        `;
-        db.query(insertAccountSql, [googleId, email, picture], (err, result) => {
-          if (err) {
-            console.error("Lỗi khi lưu tài khoản:", err);
-            return res.status(500).json({ error: 'Lỗi server' });
-          }
+        const user = results[0];
 
-          user = {
-            ID: result.insertId,
-            AccountName: googleId, // Lưu Google ID vào AccountName
-            Mail: email,
-            ProfilePicture: picture,
-          };
+        // Kiểm tra xem `auth_provider` đã là `google` chưa
+        if (user.auth_provider !== 'google') {
+          const updateAuthProviderSql = 'UPDATE account SET auth_provider = ? WHERE ID = ?';
+          db.query(updateAuthProviderSql, ['google', user.ID], (err) => {
+            if (err) {
+              console.error("Lỗi khi cập nhật auth_provider:", err);
+              return res.status(500).json({ error: 'Lỗi server' });
+            }
+          });
+        }
+
+        // Tạo JWT token
+        const jwtPayload = {
+          ID: user.ID,
+          AccountName: user.AccountName,
+          Mail: user.Mail,
+        };
+
+        const jwtToken = jwt.sign(jwtPayload, secretKey, { expiresIn: '1h' });
+
+        // Trả về JWT token và thông tin người dùng
+        return res.status(200).json({
+          message: "Đăng nhập Google thành công",
+          user,
+          token: jwtToken,
         });
       }
 
-      // Tạo JWT token
-      const jwtPayload = {
-        ID: user.ID,
-        AccountName: user.AccountName,
-        Mail: user.Mail,
-      };
+      // Tài khoản chưa tồn tại, tạo mới
+      const insertAccountSql = `
+        INSERT INTO account (AccountName, Mail, ProfilePicture, auth_provider)
+        VALUES (?, ?, ?, ?)
+      `;
+      db.query(insertAccountSql, [name, email, picture, 'google'], (err, result) => {
+        if (err) {
+          console.error("Lỗi khi lưu tài khoản:", err);
+          return res.status(500).json({ error: 'Lỗi server' });
+        }
 
-      const jwtToken = jwt.sign(jwtPayload, secretKey, { expiresIn: '1h' });
+        const user = {
+          ID: result.insertId,
+          AccountName: name,
+          Mail: email,
+          ProfilePicture: picture,
+        };
 
-      // Trả về JWT token và thông tin người dùng
-      res.status(200).json({
-        message: "Đăng nhập Google thành công",
-        user,
-        token: jwtToken, // JWT token cho client
+        // Tạo JWT token
+        const jwtPayload = {
+          ID: user.ID,
+          AccountName: user.AccountName,
+          Mail: user.Mail,
+        };
+
+        const jwtToken = jwt.sign(jwtPayload, secretKey, { expiresIn: '1h' });
+
+        // Trả về JWT token và thông tin người dùng
+        return res.status(200).json({
+          message: "Đăng nhập Google thành công",
+          user,
+          token: jwtToken,
+        });
       });
     });
   } catch (error) {
@@ -644,6 +831,7 @@ app.post('/api/google-auth', async (req, res) => {
     return res.status(400).json({ error: 'Xác thực không hợp lệ' });
   }
 });
+
 
 // Hàm thêm vé vào chi tiết giỏ hàng
 app.post("/api/chitietgiohang", (req, res) => {
@@ -746,7 +934,6 @@ app.get("/api/giohang/:gioHangId", (req, res) => {
     }
 
     if (results.length === 0) {
-      console.log('Giỏ hàng trống hoặc không có tour có trạng thái on.');
       return res.status(404).json({ error: 'Không tìm thấy tour có trạng thái on trong giỏ hàng.' });
     }
 
@@ -865,7 +1052,6 @@ app.post('/api/them-chitiet-don-hang', (req, res) => {
     });
 });
 
-
 const s3 = new S3Client({
   region: "image-web-travel",  // Khu vực Tebi.io (có thể khác với AWS)
   endpoint: "https://s3.tebi.io",  // Endpoint Tebi.io, nếu có
@@ -935,12 +1121,12 @@ app.get('/get-post/:id', (req, res) => {
 });
 // Create post API
 app.post('/api/posts', (req, res) => {
-  const { title, content, author, datePosted, accountId, image_path } = req.body;
+  const { title, content, datePosted, accountId, image_path } = req.body;
 
-  console.log('Received data:', { title, content, author, datePosted, accountId, image_path });  // Log dữ liệu nhận được
+  console.log('Received data:', { title, content, datePosted, accountId, image_path });  // Log dữ liệu nhận được
 
-  const query = 'INSERT INTO baiviet (tieude, noidung, tacgia, ngaydang, AccountId, image_path ) VALUES (?, ?, ?, ?, ?, ?)';
-  db.query(query, [title, content, author, datePosted, accountId, image_path], (err, result) => {
+  const query = 'INSERT INTO baiviet (tieude, noidung, ngaydang, AccountId, image_path ) VALUES (?, ?, ?, ?, ?)';
+  db.query(query, [title, content, datePosted, accountId, image_path], (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ message: 'Failed to save post' });
@@ -1113,7 +1299,49 @@ app.put('/api/orders/cancel/:orderId', authenticateJWT, (req, res) => {
 });
 
 
+app.get('/api/carsfull', (req, res) => {
+  const query = 'SELECT * FROM car';
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('Lỗi khi lấy dữ liệu:', err);
+      return res.status(500).json({ error: 'Không thể lấy dữ liệu từ database' });
+    }
+    res.json(results);
+  });
+});
+app.get("/api/cars", (req, res) => {
+  const query = "SELECT * FROM car WHERE CarStatus = 'available'"; // Lấy xe có trạng thái available
+  db.query(query, (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
 
+// Đặt xe
+app.post("/api/book-car", (req, res) => {
+  const { carId, customerName, customerPhone, customerEmail, rentalDate, returnDate, totalPrice } = req.body;
+
+  // Cập nhật trạng thái xe là "rented" khi khách hàng đặt xe
+  const updateCarStatus = "UPDATE car SET CarStatus = 'rented' WHERE CarId = ?";
+  db.query(updateCarStatus, [carId], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Thêm thông tin thuê xe vào bảng car_rentals
+    const query = "INSERT INTO car_rentals (CarId, CustomerName, CustomerPhone, CustomerEmail, RentalDate, ReturnDate, TotalPrice) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    db.query(query, [carId, customerName, customerPhone, customerEmail, rentalDate, returnDate, totalPrice], (err, result) => {
+      if (err) {
+        console.log(err); // Log lỗi
+        return res.status(500).json({ error: err.message });
+      }
+      // console.log(result); // Log kết quả
+      res.status(201).json({ message: "Đặt xe thành công!" });
+    });
+  });
+});
 
 
 
