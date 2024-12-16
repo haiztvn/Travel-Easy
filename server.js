@@ -9,22 +9,22 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require("bcryptjs");
 const cors = require("cors"); // Import middleware CORS
 require('dotenv').config();
+const authRoutes = require('./routes/auth');
+const cartRoutes = require('./routes/orders');
+
 const crypto = require('crypto');
 
 const { OAuth2Client } = require("google-auth-library");
 const client = new OAuth2Client(process.env.REACT_APP_GOOGLE_CLIENT_ID);
 const secretKey = (process.env.REACT_APP_TOKEN);
 
+// const authenticateJWT = require('./middlewares/authenticateJWT'); // Import middleware
 const app = express();
 const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
-// Tăng giới hạn kích thước yêu cầu
-app.use(express.json({ limit: '10mb' })); // Giới hạn tải lên là 10MB
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-// Middleware kiểm tra token
+// app.use(authenticateJWT); // Sử dụng middleware cho toàn bộ ứng dụng
 const authenticateJWT = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1]; // Lấy token từ header
 
@@ -42,8 +42,12 @@ const authenticateJWT = (req, res, next) => {
   });
 };
 
+
 // Sử dụng middleware CORS// Cấu hình CORS để cho phép yêu cầu từ một nguồn khác
 app.use(cors());
+
+app.use('/auth', authRoutes);
+app.use('/orders', cartRoutes);
 
 // Cron job chạy mỗi phút
 // cron.schedule('* * * * *', () => {
@@ -146,7 +150,6 @@ app.get("/api/tourdl", (req, res) => {
   });
 });
 
-
 // Route thêm tour mới
 app.post('/api/tourdl', (req, res) => {
   const {
@@ -208,6 +211,39 @@ app.post('/api/tourdl', (req, res) => {
 
       res.status(201).json({ message: 'Tour đã được thêm thành công và vé đã được tạo', id: tourId });
     });
+  });
+});
+// API lấy dữ liệu phân bổ theo loại du lịch
+app.get('/pie/tourdl', (req, res) => {
+  const query = `
+    SELECT tl.TenTL AS loai, COUNT(t.TourId) AS count
+    FROM tourdl t
+    JOIN theloaidl tl ON t.TouTL = tl.IdTL
+    GROUP BY tl.TenTL
+  `;
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Error retrieving data');
+    }
+    res.json(results);
+  });
+});
+// API lấy dữ liệu phân bổ theo quốc gia
+app.get('/pie/quocgia', (req, res) => {
+  const query = `
+    SELECT kv.TenKV AS khu_vuc, COUNT(t.TourId) AS count
+    FROM tourdl t
+    JOIN quocgia q ON t.TouQG = q.IdQG
+    JOIN khuvuc kv ON q.KhuVucId = kv.IdKV
+    GROUP BY kv.TenKV
+  `;
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Error retrieving data');
+    }
+    res.json(results);
   });
 });
 
@@ -590,7 +626,52 @@ app.post("/api/account/change-password", authenticateJWT, (req, res) => {
   });
 });
 
+// Endpoint tạo mật khẩu mới
+app.post('/api/account/request-new-password', (req, res) => {
+  const { email, accountName } = req.body;
 
+  if (!email || !accountName) {
+    return res.status(400).json({ error: 'Cần cung cấp Email và Tên tài khoản' });
+  }
+
+  // Kiểm tra xem account có tồn tại không
+  const query = 'SELECT * FROM account WHERE Mail = ? AND AccountName = ?';
+  db.query(query, [email, accountName], (err, results) => {
+    if (err) {
+      console.error('Lỗi truy vấn database:', err);
+      return res.status(500).json({ error: 'Lỗi khi truy vấn cơ sở dữ liệu' });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy tài khoản' });
+    }
+
+    // Tạo mật khẩu mới
+    const newPassword = crypto.randomBytes(4).toString('hex'); // 8 ký tự ngẫu nhiên
+
+    // Mã hóa mật khẩu mới
+    bcrypt.hash(newPassword, 10, (err, hashedPassword) => {
+      if (err) {
+        console.error('Lỗi khi băm mật khẩu:', err);
+        return res.status(500).json({ error: 'Lỗi khi băm mật khẩu' });
+      }
+
+      // Cập nhật mật khẩu đã mã hóa vào database
+      const updateQuery = 'UPDATE account SET AccountPassword = ? WHERE Mail = ? AND AccountName = ?';
+      db.query(updateQuery, [hashedPassword, email, accountName], (err) => {
+        if (err) {
+          console.error('Lỗi cập nhật mật khẩu:', err);
+          return res.status(500).json({ error: 'Lỗi khi cập nhật mật khẩu' });
+        }
+
+        res.json({
+          message: 'Mật khẩu mới đã được tạo thành công.',
+          newPassword, // Trả mật khẩu mới cho frontend để gửi qua EmailJS
+        });
+      });
+    });
+  });
+});
 
 app.post('/api/account/upload-profile-picture', authenticateJWT, (req, res) => {
   const userId = req.user.ID;
@@ -703,7 +784,7 @@ app.post("/api/login", (req, res) => {
         Mail: user.Mail,  // Thêm quyền hạn nếu cần thiết
       };
 
-      const token = jwt.sign(payload, secretKey, { expiresIn: '5m' }); // Tạo token với thời gian sống 1 giờ
+      const token = jwt.sign(payload, secretKey, { expiresIn: '1h' }); // Tạo token với thời gian sống 1 giờ
 
       // Trả về thông tin người dùng và token
       res.status(200).json({
@@ -1135,68 +1216,126 @@ app.post('/api/posts', (req, res) => {
   });
 });
 
-// Doanh thu theo ngày trong tuần
-app.get('/revenue/weekly', (req, res) => {
+app.get('/revenue/daily', (req, res) => {
   const query = `
-    SELECT DAYOFWEEK(dh.NgayDatHang) AS day_of_week, 
-           SUM(ctdh.SoLuong * v.GiaVe) AS daily_revenue
-    FROM donhang dh
-    JOIN chitietdonhang ctdh ON dh.DonHangID = ctdh.DonHangID
-    JOIN vedl v ON ctdh.VeId = v.VeId
-    WHERE YEARWEEK(dh.NgayDatHang, 1) = YEARWEEK(CURDATE(), 1)
-    GROUP BY DAYOFWEEK(dh.NgayDatHang)
-    ORDER BY day_of_week;
+    SELECT 
+      DATE_FORMAT(tt.NgayTT, '%Y-%m-%d') AS payment_date,  -- Sử dụng định dạng ngày chuẩn ISO
+      COALESCE(SUM(tt.Amount), 0) AS daily_revenue
+    FROM (
+      SELECT CURDATE() - INTERVAL n DAY AS payment_date
+      FROM (
+        SELECT 0 AS n UNION ALL
+        SELECT 1 UNION ALL
+        SELECT 2 UNION ALL
+        SELECT 3 UNION ALL
+        SELECT 4 UNION ALL
+        SELECT 5 UNION ALL
+        SELECT 6
+      ) AS days
+    ) AS dates
+    LEFT JOIN thanhtoan tt ON DATE_FORMAT(tt.NgayTT, '%Y-%m-%d') = dates.payment_date AND tt.Status = 'Success'
+    GROUP BY dates.payment_date
+    ORDER BY dates.payment_date ASC;  -- Thay đổi từ DESC thành ASC
   `;
 
   db.query(query, (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
-      res.json({ revenue: result });
+      const revenueData = result || [];
+      res.json({ revenue: revenueData });
     }
   });
 });
 
-// Doanh thu theo tháng trong năm
-app.get('/revenue/yearly', (req, res) => {
+
+
+app.get('/revenue/monthly', (req, res) => {
+  const { year } = req.query; // Lấy năm từ query string
+  // Nếu không có năm, mặc định lấy năm hiện tại
+  const targetYear = year;
+
   const query = `
-    SELECT MONTH(dh.NgayDatHang) AS month_of_year, 
-           SUM(ctdh.SoLuong * v.GiaVe) AS monthly_revenue
-    FROM donhang dh
-    JOIN chitietdonhang ctdh ON dh.DonHangID = ctdh.DonHangID
-    JOIN vedl v ON ctdh.VeId = v.VeId
-    WHERE YEAR(dh.NgayDatHang) = YEAR(CURDATE())
-    GROUP BY MONTH(dh.NgayDatHang)
-    ORDER BY month_of_year;
+    SELECT 
+      YEAR(tt.NgayTT) AS year,
+      MONTH(tt.NgayTT) AS month,
+      SUM(tt.Amount) AS monthly_revenue
+    FROM thanhtoan tt
+    WHERE tt.Status = 'Success' AND YEAR(tt.NgayTT) = ?
+    GROUP BY YEAR(tt.NgayTT), MONTH(tt.NgayTT)
+    ORDER BY year DESC, month DESC;
+  `;
+
+  db.query(query, [targetYear], (err, result) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+    } else {
+      const revenueData = result || [];
+
+      // Tạo một mảng các tháng từ tháng hiện tại đến tháng 6 tháng trước
+      const allMonths = [];
+      const currentDate = new Date();
+      for (let i = 0; i < 13; i++) {
+        const month = new Date(targetYear, currentDate.getMonth() - i, 1);
+        const monthLabel = `${month.getFullYear()}-${(month.getMonth() + 1).toString().padStart(2, '0')}`; // yyyy-mm
+        allMonths.push(monthLabel);
+      }
+      // Điền doanh thu cho các tháng không có dữ liệu
+      const formattedRevenue = allMonths.map(month => {
+        const dataForMonth = revenueData.find(item => `${item.year}-${String(item.month).padStart(2, '0')}` === month);
+        return {
+          month,
+          monthly_revenue: dataForMonth ? dataForMonth.monthly_revenue : 0
+        };
+      });
+
+      res.json({ revenue: formattedRevenue });
+    }
+  });
+});
+
+app.get('/revenue/year', (req, res) => {
+  // Truy vấn để lấy danh sách các năm có dữ liệu doanh thu
+  const query = `
+    SELECT DISTINCT YEAR(tt.NgayTT) AS year
+    FROM thanhtoan tt
+    WHERE tt.Status = 'Success'
+    ORDER BY year DESC;
   `;
 
   db.query(query, (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
-      res.json({ revenue: result });
+      const years = result.map(item => item.year);
+      res.json({ years: years || [] });
     }
   });
 });
+// API lấy tổng doanh thu của năm
+app.get('/revenue/year/total', (req, res) => {
+  const { year } = req.query;  // Lấy năm từ query string
+  const targetYear = year || new Date().getFullYear();  // Nếu không có năm, mặc định lấy năm hiện tại
 
-// Tính doanh thu theo tour
-app.get('/revenue/tour', (req, res) => {
-  const query = `SELECT t.TourName, SUM(ctdh.SoLuong * v.GiaVe) AS revenue 
-                 FROM donhang dh
-                 JOIN chitietdonhang ctdh ON dh.DonHangID = ctdh.DonHangID
-                 JOIN vedl v ON ctdh.VeId = v.VeId
-                 JOIN tourdl t ON v.TourId = t.TourId
-                 GROUP BY t.TourName
-                 ORDER BY revenue DESC`;
+  // Truy vấn tổng doanh thu của năm đó
+  const query = `
+    SELECT 
+      SUM(tt.Amount) AS total_revenue
+    FROM thanhtoan tt
+    WHERE tt.Status = 'Success' 
+      AND YEAR(tt.NgayTT) = ?
+  `;
 
-  db.query(query, (err, result) => {
+  db.query(query, [targetYear], (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
-      res.json({ tours: result });
+      const totalRevenue = result[0]?.total_revenue || 0;
+      res.json({ year: targetYear, total_revenue: totalRevenue });
     }
   });
 });
+
 
 // API để lấy thông tin vé
 app.get('/api/tours/ticket-info', (req, res) => {
@@ -1204,8 +1343,8 @@ app.get('/api/tours/ticket-info', (req, res) => {
         SELECT 
           t.TourId,
           t.TourName,
-          v.SoLuongVe - (IFNULL(SUM(cd.SoLuong), 0) + IFNULL(SUM(cg.SoLuongVe), 0)) AS SoLuongVeConLai,
-          IFNULL(SUM(cd.SoLuong), 0) + IFNULL(SUM(cg.SoLuongVe), 0) AS SoLuongVeDaBan
+          v.SoLuongVe - IFNULL(SUM(cd.SoLuong), 0) AS SoLuongVeConLai,
+          IFNULL(SUM(cd.SoLuong), 0) AS SoLuongVeDaBan
         FROM 
           tourdl t
         JOIN 
@@ -1213,7 +1352,10 @@ app.get('/api/tours/ticket-info', (req, res) => {
         LEFT JOIN 
           chitietdonhang cd ON cd.VeId = v.VeId
         LEFT JOIN 
-          chitietgiohang cg ON cg.VeId = v.VeId
+          donhang dh ON cd.DonHangID = dh.DonHangID
+        WHERE 
+          t.TrangThai = 'on' -- Chỉ tính các tour có trạng thái "on"
+          AND dh.TrangThai = 'paid' -- Chỉ tính các đơn hàng đã thanh toán
         GROUP BY 
           t.TourId, t.TourName, v.SoLuongVe;
     `;
@@ -1226,6 +1368,7 @@ app.get('/api/tours/ticket-info', (req, res) => {
     res.json(results);
   });
 });
+
 
 // API để lấy danh sách đơn hàng
 app.get('/api/orders', (req, res) => {
