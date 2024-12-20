@@ -15,10 +15,8 @@ const pool = mysql.createPool({
 const performQuery = (query, params, callback) => {
     pool.execute(query, params, (err, results) => {
         if (err) {
-            console.error("Lỗi khi thực hiện truy vấn:", err);
             callback(err, null);
         } else {
-            console.log("Kết quả truy vấn:", results);
             callback(null, results);
         }
     });
