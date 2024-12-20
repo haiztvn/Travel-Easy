@@ -1,7 +1,6 @@
 const express = require('express');
 const app = express.Router();
-const db = require('../config/db');
-
+const { performQuery } = require('./config/db'); 
 
 // Lấy danh sách đơn hàng kèm thông tin khách hàng
 app.get('/all/orders', (req, res) => {
@@ -16,7 +15,7 @@ app.get('/all/orders', (req, res) => {
         FROM donhang
         JOIN khachhang ON donhang.KhachHangID = khachhang.IdKH
     `;
-    db.query(query, (err, results) => {
+    performQuery(query, (err, results) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
@@ -30,7 +29,7 @@ app.put('/all/orders/:id', (req, res) => {
     const { TrangThai } = req.body; // Trạng thái mới
 
     const query = 'UPDATE donhang SET TrangThai = ? WHERE DonHangID = ?';
-    db.query(query, [TrangThai, id], (err, result) => {
+    performQuery(query, [TrangThai, id], (err, result) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }
