@@ -36,13 +36,14 @@ const createConnection = () => {
 let db = createConnection();
 
 // Hàm thực hiện truy vấn
-const performQuery = (query, callback) => {
+// Hàm thực hiện truy vấn
+const performQuery = (query, params, callback) => {
     if (db.state !== 'connected') {
         console.log("Kết nối MySQL không hợp lệ, tái kết nối...");
         db = createConnection(); // Tạo lại kết nối nếu không hợp lệ
     }
 
-    db.query(query, (err, results) => {
+    db.query(query, params, (err, results) => {
         if (err) {
             console.error("Lỗi khi thực hiện truy vấn:", err);
             callback(err, null);
@@ -52,6 +53,7 @@ const performQuery = (query, callback) => {
         }
     });
 };
+
 
 // Xuất các hàm cần thiết
 module.exports = {
