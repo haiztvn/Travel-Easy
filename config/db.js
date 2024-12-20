@@ -35,9 +35,5 @@ const performQuery = (query, params) => {
     });
 };
 
-// Ví dụ sử dụng
-performQuery('SELECT * FROM users')
-    .then(results => console.log("Kết quả truy vấn:", results))
-    .catch(err => console.error("Lỗi truy vấn:", err));
 
 module.exports = { performQuery };
