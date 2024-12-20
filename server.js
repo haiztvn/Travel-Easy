@@ -24,10 +24,11 @@ const port = process.env.PORT || 5000;
 
 // Cấu hình CORS
 const corsOptions = {
-  origin: 'https://auorient.com', // Chỉ định nguồn frontend
+  origin: ['https://auorient.com', 'https://dashboard.auorient.com'], // Chỉ định danh sách các nguồn được phép
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
+
 
 app.use(cors(corsOptions));  // Áp dụng middleware CORS cho tất cả các route
 app.use(bodyParser.json());
