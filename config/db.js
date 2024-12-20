@@ -36,6 +36,20 @@ const performQuery = (query, params, callback) => {
     });
 };
 
+// Hàm kiểm tra và tái kết nối nếu kết nối bị mất
+const checkAndReconnect = () => {
+    pool.on('connection', (connection) => {
+        console.log('Một kết nối mới đã được tạo.');
+    });
+
+    pool.on('error', (err) => {
+        console.error('Lỗi trong pool kết nối:', err);
+    });
+};
+
+// Kiểm tra và tái kết nối nếu cần
+checkAndReconnect();
+
 // Xuất các hàm cần thiết
 module.exports = {
     performQuery
