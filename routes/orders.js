@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express.Router();
-const { performQuery } = require('./config/db'); 
+const { performQuery } = require('../config/db'); 
 
 // Lấy danh sách đơn hàng kèm thông tin khách hàng
 app.get('/all/orders', (req, res) => {
