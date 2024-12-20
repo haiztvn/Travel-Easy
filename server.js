@@ -22,7 +22,14 @@ const secretKey = (process.env.REACT_APP_TOKEN);
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+// Cấu hình CORS
+const corsOptions = {
+  origin: 'https://auorient.com', // Chỉ định nguồn frontend
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));  // Áp dụng middleware CORS cho tất cả các route
 app.use(bodyParser.json());
 // app.use(authenticateJWT); // Sử dụng middleware cho toàn bộ ứng dụng
 const authenticateJWT = (req, res, next) => {
