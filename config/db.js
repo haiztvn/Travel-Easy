@@ -7,6 +7,9 @@ const createConnection = () => {
         user: "ndbdxcjw_doanchuyennganh",
         password: "YcuDSH8P5nWaxGuzYebR",
         database: "ndbdxcjw_doanchuyennganh",
+        waitForConnections: true,
+        connectionLimit: 10,  // Giới hạn số kết nối tối đa trong pool
+        queueLimit: 0
     });
 
     db.connect((err) => {
