@@ -12,14 +12,14 @@ const pool = mysql.createPool({
 });
 
 // Hàm thực hiện truy vấn
-const performQuery = (query, params, callback) => {
+const performQuery = (query, params) => {
     console.log("Đang lấy kết nối từ pool...");
 
     // Lấy kết nối từ pool một lần duy nhất
     pool.getConnection((err, connection) => {
         if (err) {
             console.error("Lỗi khi kết nối tới cơ sở dữ liệu:", err);
-            callback(err, null);
+         
             return;
         }
 
@@ -31,10 +31,10 @@ const performQuery = (query, params, callback) => {
 
             if (err) {
                 console.error("Lỗi khi thực hiện truy vấn:", err);
-                callback(err, null);
+                
             } else {
                 console.log("Kết quả truy vấn:", results);
-                callback(null, results);
+                
             }
         });
     });
