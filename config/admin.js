@@ -14,7 +14,7 @@ const createAdmin = (username, passwordHash, role) => {
 
 const getAdminByUsername = (username) => {
     return new Promise((resolve, reject) => {
-        db.query(
+        performQuery(
             "SELECT * FROM admin WHERE Username = ?",
             [username],
             (err, rows) => {
