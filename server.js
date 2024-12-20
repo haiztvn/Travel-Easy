@@ -2,7 +2,7 @@ const express = require("express");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const multer = require("multer");
 const multerS3 = require("multer-s3");
-const db = require('./config/db');
+const { performQuery } = require('./DBHelper'); // Import module DBHelper
 const cron = require('node-cron');
 const bodyParser = require("body-parser");
 const jwt = require('jsonwebtoken');
@@ -56,7 +56,7 @@ app.use('/orders', cartRoutes);
 //   // Truy vấn SQL để cập nhật tất cả các tour đã hết hạn (TourTime nhỏ hơn hiện tại)
 //   const query = `UPDATE tourdl SET TrangThai = 'off' WHERE TrangThai = 'on' AND TourTime < ? AND TourTime > 0`;
 
-//   db.query(query, [currentDate], (err, result) => {
+//   performQuery(query, [currentDate], (err, result) => {
 //     if (err) {
 //       console.error('Lỗi khi cập nhật trạng thái tour:', err);
 //     } else {
@@ -72,7 +72,7 @@ app.use('/orders', cartRoutes);
 app.get("/api/tourdl", (req, res) => {
   const queryTour = "SELECT * FROM tourdl WHERE TrangThai = 'on'";
 
-  db.query(queryTour, (err, tours) => {
+  performQuery(queryTour, (err, tours) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -111,21 +111,21 @@ app.get("/api/tourdl", (req, res) => {
         Promise.all([
           queries.theloai
             ? new Promise((res, rej) =>
-              db.query(queries.theloai, (err, result) =>
+              performQuery(queries.theloai, (err, result) =>
                 err ? rej(err) : res(result[0]?.TenTL || null)
               )
             )
             : Promise.resolve(null),
           queries.quocgia
             ? new Promise((res, rej) =>
-              db.query(queries.quocgia, (err, result) =>
+              performQuery(queries.quocgia, (err, result) =>
                 err ? rej(err) : res(result[0]?.TenQG || null)
               )
             )
             : Promise.resolve(null),
           queries.khuvuc
             ? new Promise((res, rej) =>
-              db.query(queries.khuvuc, (err, result) =>
+              performQuery(queries.khuvuc, (err, result) =>
                 err ? rej(err) : res(result[0]?.TenKV || null)
               )
             )
@@ -185,7 +185,7 @@ app.post('/api/tourdl', (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  db.query(insertTourQuery, [
+  performQuery(insertTourQuery, [
     TourName, TourImage, TourPrice, SoLuongVe, TourTime, TourDay,
     TourDetail, TourIntroduce, TourVideo, TouKV, TouQG, TouTL
   ], (err, result) => {
@@ -201,7 +201,7 @@ app.post('/api/tourdl', (req, res) => {
       VALUES (?, ?, ?)
     `;
 
-    db.query(insertVeQuery, [
+    performQuery(insertVeQuery, [
       tourId, TourPrice, SoLuongVe
     ], (err) => {
       if (err) {
@@ -221,7 +221,7 @@ app.get('/pie/tourdl', (req, res) => {
     JOIN theloaidl tl ON t.TouTL = tl.IdTL
     GROUP BY tl.TenTL
   `;
-  db.query(query, (err, results) => {
+  performQuery(query, (err, results) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Error retrieving data');
@@ -238,7 +238,7 @@ app.get('/pie/quocgia', (req, res) => {
     JOIN khuvuc kv ON q.KhuVucId = kv.IdKV
     GROUP BY kv.TenKV
   `;
-  db.query(query, (err, results) => {
+  performQuery(query, (err, results) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Error retrieving data');
@@ -253,7 +253,7 @@ app.put('/api/tourdl/:TourId', (req, res) => {
 
   const query = 'UPDATE tourdl SET TrangThai = "off" WHERE TourId = ?';
 
-  db.query(query, [TourId], (err, result) => {
+  performQuery(query, [TourId], (err, result) => {
     if (err) {
       console.error('Lỗi khi cập nhật trạng thái tour:', err);
       res.status(500).json({ error: 'Lỗi khi cập nhật trạng thái tour' });
@@ -267,7 +267,7 @@ app.put('/api/tourdl/:TourId', (req, res) => {
 ///
 app.get("/api/theloaidl", (req, res) => {
   // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
-  db.query("SELECT * FROM theloaidl", (err, result) => {
+  performQuery("SELECT * FROM theloaidl", (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -278,7 +278,7 @@ app.get("/api/theloaidl", (req, res) => {
 ///
 app.get("/api/khuvuc", (req, res) => {
   // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
-  db.query("SELECT * FROM khuvuc", (err, result) => {
+  performQuery("SELECT * FROM khuvuc", (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -293,7 +293,7 @@ app.post("/api/khuvuc", (req, res) => {
   }
 
   // Chèn dữ liệu mới vào bảng khuvuc
-  db.query("INSERT INTO khuvuc (TenKV) VALUES (?)", [TenKV], (err, result) => {
+  performQuery("INSERT INTO khuvuc (TenKV) VALUES (?)", [TenKV], (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -305,7 +305,7 @@ app.post("/api/khuvuc", (req, res) => {
 ///
 app.get("/api/quocgia", (req, res) => {
   // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
-  db.query("SELECT * FROM quocgia", (err, result) => {
+  performQuery("SELECT * FROM quocgia", (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -319,7 +319,7 @@ app.post("/api/quocgia", (req, res) => {
     return res.status(400).json({ error: "Tên quốc gia và khu vực không được bỏ trống" });
   }
 
-  db.query("INSERT INTO quocgia (TenQG, KhuVucId) VALUES (?, ?)", [TenQG, KhuVucId], (err, result) => {
+  performQuery("INSERT INTO quocgia (TenQG, KhuVucId) VALUES (?, ?)", [TenQG, KhuVucId], (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -331,7 +331,7 @@ app.post("/api/quocgia", (req, res) => {
 ///
 app.get("/api/Khachhang", (req, res) => {
   // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
-  db.query("SELECT * FROM khachhang", (err, result) => {
+  performQuery("SELECT * FROM khachhang", (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -344,7 +344,7 @@ app.get("/api/Khachhang/login", authenticateJWT, (req, res) => {
 
   // Truy vấn chỉ lấy thông tin khách hàng đã đăng nhập
   const sql = "SELECT * FROM khachhang WHERE AccountID = ?";
-  db.query(sql, [userId], (err, result) => {
+  performQuery(sql, [userId], (err, result) => {
     if (err) {
       console.error("Lỗi khi lấy thông tin khách hàng:", err);
       return res.status(500).json({ error: "Lỗi khi lấy thông tin khách hàng" });
@@ -367,7 +367,7 @@ app.post('/api/khachhang', (req, res) => {
 
   // Truy vấn để kiểm tra xem AccountID đã tồn tại chưa
   const checkQuery = 'SELECT * FROM khachhang WHERE AccountID = ?';
-  db.query(checkQuery, [AccountID], (err, results) => {
+  performQuery(checkQuery, [AccountID], (err, results) => {
     if (err) {
       console.error('Lỗi khi kiểm tra AccountID:', err);
       return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu' });
@@ -380,7 +380,7 @@ app.post('/api/khachhang', (req, res) => {
 
     // Nếu AccountID không tồn tại, thực hiện chèn dữ liệu
     const insertQuery = 'INSERT INTO khachhang (TenKH, Email, SDT, DiaChi, NoiDung, AccountID) VALUES (?, ?, ?, ?, ?, ?)';
-    db.query(insertQuery, [TenKH, Email, SDT, DiaChi, NoiDung, AccountID], (err, result) => {
+    performQuery(insertQuery, [TenKH, Email, SDT, DiaChi, NoiDung, AccountID], (err, result) => {
       if (err) {
         console.error('Lỗi khi thêm khách hàng:', err);
         return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu' });
@@ -401,7 +401,7 @@ app.put('/api/khachhang/:id', (req, res) => {
     WHERE AccountID = ?
   `;
 
-  db.query(updateQuery, [TenKH, SDT, DiaChi, NoiDung, khachhangId], (err, result) => {
+  performQuery(updateQuery, [TenKH, SDT, DiaChi, NoiDung, khachhangId], (err, result) => {
     if (err) {
       console.error('Lỗi khi cập nhật khách hàng:', err);
       return res.status(500).json({ error: 'Lỗi khi cập nhật khách hàng' });
@@ -457,7 +457,7 @@ app.put('/api/khachhang-social', authenticateJWT, (req, res) => {
   // Đẩy userId vào cuối mảng giá trị (ID khách hàng)
   updateValues.push(userId);
 
-  db.query(updateQuery, updateValues, (err, result) => {
+  performQuery(updateQuery, updateValues, (err, result) => {
     if (err) {
       console.error('Lỗi khi cập nhật khách hàng:', err);
       return res.status(500).json({ error: 'Lỗi khi cập nhật thông tin khách hàng' });
@@ -478,7 +478,7 @@ app.put('/api/khachhang-social', authenticateJWT, (req, res) => {
 
 app.get("/api/account", (req, res) => {
   // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
-  db.query("SELECT * FROM account", (err, result) => {
+  performQuery("SELECT * FROM account", (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -489,7 +489,7 @@ app.get("/api/account", (req, res) => {
 app.get("/api/account/login", authenticateJWT, (req, res) => {
   const userId = req.user.ID; // Lấy ID người dùng từ JWT token
 
-  db.query("SELECT * FROM account WHERE ID = ?", [userId], (err, result) => {
+  performQuery("SELECT * FROM account WHERE ID = ?", [userId], (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else if (result.length > 0) {
@@ -509,7 +509,7 @@ app.post("/api/account", (req, res) => {
 
   // Kiểm tra xem tài khoản đã tồn tại chưa
   const checkAccountSql = "SELECT * FROM account WHERE AccountName = ? OR Mail = ?";
-  db.query(checkAccountSql, [AccountName, Mail], (err, result) => {
+  performQuery(checkAccountSql, [AccountName, Mail], (err, result) => {
     if (err) {
       console.error("Lỗi khi kiểm tra tài khoản:", err);
       return res.status(500).json({ error: "Lỗi khi kiểm tra tài khoản" });
@@ -532,7 +532,7 @@ app.post("/api/account", (req, res) => {
 
       // Lưu người dùng vào database
       const insertAccountSql = "INSERT INTO account (AccountName, AccountPassword, Mail, ProfilePicture) VALUES (?, ?, ?, ?)";
-      db.query(insertAccountSql, [AccountName, hashedPassword, Mail, profilePic], (err, result) => {
+      performQuery(insertAccountSql, [AccountName, hashedPassword, Mail, profilePic], (err, result) => {
         if (err) {
           console.error("Lỗi khi lưu người dùng:", err);
           return res.status(500).json({ error: "Lỗi khi lưu người dùng" });
@@ -552,7 +552,7 @@ app.post('/api/account/request-change-password', authenticateJWT, (req, res) => 
   const expirationTime = new Date().getTime() + 60 * 1000; // Thời gian hết hạn là 10 phút sau
   if (!userMail) return console.log('not');;
   // Lưu mã reset vào cơ sở dữ liệu
-  db.query(
+  performQuery(
     'UPDATE account SET reset_token = ?, reset_token_expiration = ? WHERE ID = ?',
     [token, expirationTime, userId],
     (err, result) => {
@@ -584,7 +584,7 @@ app.post("/api/account/change-password", authenticateJWT, (req, res) => {
   }
 
   // Fetch user account information
-  db.query("SELECT * FROM account WHERE ID = ?", [userId], (err, result) => {
+  performQuery("SELECT * FROM account WHERE ID = ?", [userId], (err, result) => {
     if (err) {
       return res.status(500).json({ error: "Lỗi khi lấy thông tin tài khoản" });
     }
@@ -615,7 +615,7 @@ app.post("/api/account/change-password", authenticateJWT, (req, res) => {
         return res.status(500).json({ error: "Lỗi khi mã hóa mật khẩu" });
       }
 
-      db.query("UPDATE account SET AccountPassword = ? WHERE ID = ?", [hashedPassword, userId], (err, result) => {
+      performQuery("UPDATE account SET AccountPassword = ? WHERE ID = ?", [hashedPassword, userId], (err, result) => {
         if (err) {
           return res.status(500).json({ error: "Lỗi khi cập nhật mật khẩu" });
         }
@@ -636,7 +636,7 @@ app.post('/api/account/request-new-password', (req, res) => {
 
   // Kiểm tra xem account có tồn tại không
   const query = 'SELECT * FROM account WHERE Mail = ? AND AccountName = ?';
-  db.query(query, [email, accountName], (err, results) => {
+  performQuery(query, [email, accountName], (err, results) => {
     if (err) {
       console.error('Lỗi truy vấn database:', err);
       return res.status(500).json({ error: 'Lỗi khi truy vấn cơ sở dữ liệu' });
@@ -658,7 +658,7 @@ app.post('/api/account/request-new-password', (req, res) => {
 
       // Cập nhật mật khẩu đã mã hóa vào database
       const updateQuery = 'UPDATE account SET AccountPassword = ? WHERE Mail = ? AND AccountName = ?';
-      db.query(updateQuery, [hashedPassword, email, accountName], (err) => {
+      performQuery(updateQuery, [hashedPassword, email, accountName], (err) => {
         if (err) {
           console.error('Lỗi cập nhật mật khẩu:', err);
           return res.status(500).json({ error: 'Lỗi khi cập nhật mật khẩu' });
@@ -690,7 +690,7 @@ app.post('/api/account/upload-profile-picture', authenticateJWT, (req, res) => {
   }
 
   // Lưu chuỗi Base64 vào cơ sở dữ liệu
-  db.query('UPDATE account SET ProfilePicture = ? WHERE ID = ?', [base64Image, userId], (err, result) => {
+  performQuery('UPDATE account SET ProfilePicture = ? WHERE ID = ?', [base64Image, userId], (err, result) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -708,7 +708,7 @@ app.post('/api/account/upload-profile-picture', authenticateJWT, (req, res) => {
 
 //   // Tìm người dùng trong database
 //   const sql = "SELECT * FROM account WHERE AccountName = ?";
-//   db.query(sql, [AccountName], (err, results) => {
+//   performQuery(sql, [AccountName], (err, results) => {
 //     if (err) {
 //       console.error("Lỗi khi tìm người dùng:", err);
 //       return res.status(500).json({ error: "Lỗi khi tìm người dùng" });
@@ -753,7 +753,7 @@ app.post("/api/login", (req, res) => {
 
   // Tìm người dùng trong database
   const sql = "SELECT * FROM account WHERE AccountName = ?";
-  db.query(sql, [AccountName], (err, results) => {
+  performQuery(sql, [AccountName], (err, results) => {
     if (err) {
       console.error("Lỗi khi tìm người dùng:", err);
       return res.status(500).json({ error: "Lỗi khi tìm người dùng" });
@@ -805,7 +805,7 @@ app.put("/api/account/:id/trangthai", (req, res) => {
 
   // Cập nhật TrangThai của tài khoản
   const sql = "UPDATE account SET TrangThai = ? WHERE ID = ?";
-  db.query(sql, [TrangThai, accountId], (err, result) => {
+  performQuery(sql, [TrangThai, accountId], (err, result) => {
     if (err) {
       console.error("Lỗi khi cập nhật trạng thái:", err);
       return res.status(500).json({ error: "Lỗi khi cập nhật trạng thái" });
@@ -834,7 +834,7 @@ app.post('/api/google-auth', async (req, res) => {
 
     // Kiểm tra tài khoản trong database
     const checkAccountSql = 'SELECT * FROM account WHERE Mail = ?';
-    db.query(checkAccountSql, [email], (err, results) => {
+    performQuery(checkAccountSql, [email], (err, results) => {
       if (err) {
         console.error("Lỗi khi kiểm tra tài khoản:", err);
         return res.status(500).json({ error: 'Lỗi server' });
@@ -847,7 +847,7 @@ app.post('/api/google-auth', async (req, res) => {
         // Kiểm tra xem `auth_provider` đã là `google` chưa
         if (user.auth_provider !== 'google') {
           const updateAuthProviderSql = 'UPDATE account SET auth_provider = ? WHERE ID = ?';
-          db.query(updateAuthProviderSql, ['google', user.ID], (err) => {
+          performQuery(updateAuthProviderSql, ['google', user.ID], (err) => {
             if (err) {
               console.error("Lỗi khi cập nhật auth_provider:", err);
               return res.status(500).json({ error: 'Lỗi server' });
@@ -877,7 +877,7 @@ app.post('/api/google-auth', async (req, res) => {
         INSERT INTO account (AccountName, Mail, ProfilePicture, auth_provider)
         VALUES (?, ?, ?, ?)
       `;
-      db.query(insertAccountSql, [name, email, picture, 'google'], (err, result) => {
+      performQuery(insertAccountSql, [name, email, picture, 'google'], (err, result) => {
         if (err) {
           console.error("Lỗi khi lưu tài khoản:", err);
           return res.status(500).json({ error: 'Lỗi server' });
@@ -924,7 +924,7 @@ app.post("/api/chitietgiohang", (req, res) => {
 
   // Lấy giá vé từ bảng tourdl
   const getTourPriceQuery = 'SELECT TourPrice FROM tourdl WHERE TourId = ?';
-  db.query(getTourPriceQuery, [TourId], (err, results) => {
+  performQuery(getTourPriceQuery, [TourId], (err, results) => {
     if (err) {
       console.error('Lỗi khi lấy giá tour:', err);
       return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi lấy giá tour', details: err.message });
@@ -939,7 +939,7 @@ app.post("/api/chitietgiohang", (req, res) => {
 
     // Lấy VeId từ bảng vedl dựa trên TourId
     const getVeIdQuery = 'SELECT VeId FROM vedl WHERE TourId = ?';
-    db.query(getVeIdQuery, [TourId], (err, veResults) => {
+    performQuery(getVeIdQuery, [TourId], (err, veResults) => {
       if (err) {
         console.error('Lỗi khi lấy VeId:', err);
         return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi lấy VeId', details: err.message });
@@ -953,7 +953,7 @@ app.post("/api/chitietgiohang", (req, res) => {
 
       // Tạo giỏ hàng nếu chưa tồn tại
       const createCartQuery = 'INSERT IGNORE INTO giohang (GioHangID, KhachHangId) VALUES (?, ?)';
-      db.query(createCartQuery, [KhachHangId, KhachHangId], (err) => {
+      performQuery(createCartQuery, [KhachHangId, KhachHangId], (err) => {
         if (err) {
           console.error('Lỗi khi tạo giỏ hàng:', err);
           return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi tạo giỏ hàng', details: err.message });
@@ -961,7 +961,7 @@ app.post("/api/chitietgiohang", (req, res) => {
 
         // Kiểm tra vé đã tồn tại trong chitietgiohang chưa
         const checkCartQuery = 'SELECT SoLuongVe FROM chitietgiohang WHERE GioHangID = ? AND VeId = ?';
-        db.query(checkCartQuery, [KhachHangId, VeId], (err, cartResults) => {
+        performQuery(checkCartQuery, [KhachHangId, VeId], (err, cartResults) => {
           if (err) {
             console.error('Lỗi khi kiểm tra giỏ hàng:', err);
             return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi kiểm tra giỏ hàng', details: err.message });
@@ -970,7 +970,7 @@ app.post("/api/chitietgiohang", (req, res) => {
           if (cartResults.length > 0) {
             // Nếu vé đã có trong giỏ hàng, tăng số lượng
             const updateCartQuery = 'UPDATE chitietgiohang SET SoLuongVe = SoLuongVe + 1 WHERE GioHangID = ? AND VeId = ?';
-            db.query(updateCartQuery, [KhachHangId, VeId], (err) => {
+            performQuery(updateCartQuery, [KhachHangId, VeId], (err) => {
               if (err) {
                 console.error('Lỗi khi cập nhật số lượng vé:', err);
                 return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi cập nhật số lượng vé', details: err.message });
@@ -981,7 +981,7 @@ app.post("/api/chitietgiohang", (req, res) => {
           } else {
             // Nếu vé chưa có trong giỏ hàng, thêm vé vào giỏ hàng
             const addToCartQuery = 'INSERT INTO chitietgiohang (GioHangID, VeId, SoLuongVe, NgayDat) VALUES (?, ?, ?, ?)';
-            db.query(addToCartQuery, [KhachHangId, VeId, SoLuongKH, NgayDat], (err) => {
+            performQuery(addToCartQuery, [KhachHangId, VeId, SoLuongKH, NgayDat], (err) => {
               if (err) {
                 console.error('Lỗi khi thêm vé vào giỏ hàng:', err);
                 return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi thêm vé vào giỏ hàng', details: err.message });
@@ -1008,7 +1008,7 @@ app.get("/api/giohang/:gioHangId", (req, res) => {
   `;
 
   // Thực hiện truy vấn tới cơ sở dữ liệu
-  db.query(getCartDetailsQuery, [gioHangId], (err, results) => {
+  performQuery(getCartDetailsQuery, [gioHangId], (err, results) => {
     if (err) {
       console.error('Lỗi khi lấy chi tiết giỏ hàng:', err);
       return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi lấy chi tiết giỏ hàng', details: err.message });
@@ -1028,7 +1028,7 @@ app.put("/api/giohang/increase/:chiTietGioHangId", (req, res) => {
 
   const increaseQuery = `UPDATE chitietgiohang SET SoLuongVe = SoLuongVe + 1 WHERE ChiTietGioHangID = ? AND TrangThai = 'on'`;
 
-  db.query(increaseQuery, [chiTietGioHangId], (err, result) => {
+  performQuery(increaseQuery, [chiTietGioHangId], (err, result) => {
     if (err) {
       return res.status(500).json({ error: 'Lỗi khi tăng số lượng vé' });
     }
@@ -1041,7 +1041,7 @@ app.put("/api/giohang/decrease/:chiTietGioHangId", (req, res) => {
 
   const decreaseQuery = `UPDATE chitietgiohang SET SoLuongVe = SoLuongVe - 1 WHERE ChiTietGioHangID = ? AND SoLuongVe > 1 AND TrangThai = 'on'`;
 
-  db.query(decreaseQuery, [chiTietGioHangId], (err, result) => {
+  performQuery(decreaseQuery, [chiTietGioHangId], (err, result) => {
     if (err) {
       return res.status(500).json({ error: 'Lỗi khi giảm số lượng vé' });
     }
@@ -1055,7 +1055,7 @@ app.delete("/api/giohang/delete/:chiTietGioHangId", (req, res) => {
 
   const deleteQuery = `DELETE FROM chitietgiohang WHERE ChiTietGioHangID = ?`;
 
-  db.query(deleteQuery, [chiTietGioHangId], (err, result) => {
+  performQuery(deleteQuery, [chiTietGioHangId], (err, result) => {
     if (err) {
       return res.status(500).json({ error: 'Lỗi khi xóa vé' });
     }
@@ -1065,7 +1065,7 @@ app.delete("/api/giohang/delete/:chiTietGioHangId", (req, res) => {
 
 app.get("/api/giohang", (req, res) => {
   // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
-  db.query("SELECT * FROM giohang", (err, result) => {
+  performQuery("SELECT * FROM giohang", (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -1082,7 +1082,7 @@ app.post('/api/tao-don-hang', (req, res) => {
   }
 
   // Kiểm tra giỏ hàng có tồn tại
-  db.query('SELECT * FROM giohang WHERE GioHangID = ? AND KhachHangId = ?', [GioHangID, KhachHangID], (err, results) => {
+  performQuery('SELECT * FROM giohang WHERE GioHangID = ? AND KhachHangId = ?', [GioHangID, KhachHangID], (err, results) => {
     if (err) {
       return res.status(500).json({ error: 'Lỗi cơ sở dữ liệu khi kiểm tra giỏ hàng', details: err.message });
     }
@@ -1093,7 +1093,7 @@ app.post('/api/tao-don-hang', (req, res) => {
 
     // Thêm đơn hàng
     const donHangQuery = 'INSERT INTO donhang (KhachHangID, NgayDatHang, GioHangID, TrangThai) VALUES (?, NOW(), ?, "pending")';
-    db.query(donHangQuery, [KhachHangID, GioHangID], (err, result) => {
+    performQuery(donHangQuery, [KhachHangID, GioHangID], (err, result) => {
       if (err) {
         return res.status(500).json({ error: 'Lỗi thêm đơn hàng', details: err.message });
       }
@@ -1111,7 +1111,7 @@ app.post('/api/them-chitiet-don-hang', (req, res) => {
   }
 
   // Thêm chi tiết đơn hàng
-  db.query('INSERT INTO chitietdonhang (DonHangID, VeId, SoLuong, GiaVe) VALUES (?, ?, ?, ?)',
+  performQuery('INSERT INTO chitietdonhang (DonHangID, VeId, SoLuong, GiaVe) VALUES (?, ?, ?, ?)',
     [DonHangID, VeId, SoLuong, GiaVe],
     (err) => {
       if (err) {
@@ -1120,7 +1120,7 @@ app.post('/api/them-chitiet-don-hang', (req, res) => {
       }
 
       // Nếu thêm thành công, xóa mục trong chitietgiohang
-      db.query('DELETE FROM chitietgiohang WHERE GioHangID = ? AND VeId = ?',
+      performQuery('DELETE FROM chitietgiohang WHERE GioHangID = ? AND VeId = ?',
         [GioHangID, VeId],
         (deleteErr) => {
           if (deleteErr) {
@@ -1170,7 +1170,7 @@ app.post('/upload', upload.array('images', 5), (req, res) => {
 app.get('/get-posts', (req, res) => {
   const query = 'SELECT * FROM baiviet'; // Truy vấn lấy tất cả bài viết
 
-  db.query(query, (err, result) => {
+  performQuery(query, (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Lỗi khi lấy dữ liệu bài viết');
@@ -1186,7 +1186,7 @@ app.get('/get-post/:id', (req, res) => {
   // Truy vấn bài viết từ cơ sở dữ liệu
   const query = 'SELECT * FROM baiviet WHERE id = ?';
 
-  db.query(query, [postId], (err, result) => {
+  performQuery(query, [postId], (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).send('Lỗi khi lấy dữ liệu bài viết');
@@ -1207,7 +1207,7 @@ app.post('/api/posts', (req, res) => {
   console.log('Received data:', { title, content, datePosted, accountId, image_path });  // Log dữ liệu nhận được
 
   const query = 'INSERT INTO baiviet (tieude, noidung, ngaydang, AccountId, image_path ) VALUES (?, ?, ?, ?, ?)';
-  db.query(query, [title, content, datePosted, accountId, image_path], (err, result) => {
+  performQuery(query, [title, content, datePosted, accountId, image_path], (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ message: 'Failed to save post' });
@@ -1238,7 +1238,7 @@ app.get('/revenue/daily', (req, res) => {
     ORDER BY dates.payment_date ASC;  -- Thay đổi từ DESC thành ASC
   `;
 
-  db.query(query, (err, result) => {
+  performQuery(query, (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -1266,7 +1266,7 @@ app.get('/revenue/monthly', (req, res) => {
     ORDER BY year DESC, month DESC;
   `;
 
-  db.query(query, [targetYear], (err, result) => {
+  performQuery(query, [targetYear], (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -1303,7 +1303,7 @@ app.get('/revenue/year', (req, res) => {
     ORDER BY year DESC;
   `;
 
-  db.query(query, (err, result) => {
+  performQuery(query, (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -1326,7 +1326,7 @@ app.get('/revenue/year/total', (req, res) => {
       AND YEAR(tt.NgayTT) = ?
   `;
 
-  db.query(query, [targetYear], (err, result) => {
+  performQuery(query, [targetYear], (err, result) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -1360,7 +1360,7 @@ app.get('/api/tours/ticket-info', (req, res) => {
           t.TourId, t.TourName, v.SoLuongVe;
     `;
 
-  db.query(query, (err, results) => {
+  performQuery(query, (err, results) => {
     if (err) {
       console.error('Error executing query:', err.stack);
       return res.status(500).json({ error: 'Database query failed' });
@@ -1383,7 +1383,7 @@ app.get('/api/orders', (req, res) => {
     JOIN tourdl ON vedl.TourId = tourdl.TourId;
   `;
 
-  db.query(query, (err, results) => {
+  performQuery(query, (err, results) => {
     if (err) {
       res.status(500).json({ error: err.message });
     } else {
@@ -1402,7 +1402,7 @@ app.put('/api/orders/cancel/:orderId', authenticateJWT, (req, res) => {
   const query = `
     SELECT TrangThai FROM donhang WHERE DonHangID = ?
   `;
-  db.query(query, [orderId], (err, results) => {
+  performQuery(query, [orderId], (err, results) => {
     if (err) {
       console.error('Lỗi khi truy vấn trạng thái đơn hàng:', err);
       return res.status(500).json({ error: err.message });
@@ -1428,7 +1428,7 @@ app.put('/api/orders/cancel/:orderId', authenticateJWT, (req, res) => {
       SET TrangThai = 'cancelled'
       WHERE DonHangID = ?
     `;
-    db.query(updateQuery, [orderId], (err, updateResults) => {
+    performQuery(updateQuery, [orderId], (err, updateResults) => {
       if (err) {
         console.error('Lỗi khi cập nhật trạng thái đơn hàng:', err);
         return res.status(500).json({ error: err.message });
@@ -1444,7 +1444,7 @@ app.put('/api/orders/cancel/:orderId', authenticateJWT, (req, res) => {
 
 app.get('/api/carsfull', (req, res) => {
   const query = 'SELECT * FROM car';
-  db.query(query, (err, results) => {
+  performQuery(query, (err, results) => {
     if (err) {
       console.error('Lỗi khi lấy dữ liệu:', err);
       return res.status(500).json({ error: 'Không thể lấy dữ liệu từ database' });
@@ -1454,7 +1454,7 @@ app.get('/api/carsfull', (req, res) => {
 });
 app.get("/api/cars", (req, res) => {
   const query = "SELECT * FROM car WHERE CarStatus = 'available'"; // Lấy xe có trạng thái available
-  db.query(query, (err, results) => {
+  performQuery(query, (err, results) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1468,14 +1468,14 @@ app.post("/api/book-car", (req, res) => {
 
   // Cập nhật trạng thái xe là "rented" khi khách hàng đặt xe
   const updateCarStatus = "UPDATE car SET CarStatus = 'rented' WHERE CarId = ?";
-  db.query(updateCarStatus, [carId], (err, result) => {
+  performQuery(updateCarStatus, [carId], (err, result) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
 
     // Thêm thông tin thuê xe vào bảng car_rentals
     const query = "INSERT INTO car_rentals (CarId, CustomerName, CustomerPhone, CustomerEmail, RentalDate, ReturnDate, TotalPrice) VALUES (?, ?, ?, ?, ?, ?, ?)";
-    db.query(query, [carId, customerName, customerPhone, customerEmail, rentalDate, returnDate, totalPrice], (err, result) => {
+    performQuery(query, [carId, customerName, customerPhone, customerEmail, rentalDate, returnDate, totalPrice], (err, result) => {
       if (err) {
         console.log(err); // Log lỗi
         return res.status(500).json({ error: err.message });
