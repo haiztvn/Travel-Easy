@@ -14,8 +14,8 @@ const pool = mysql.createPool({
 // Hàm thực hiện truy vấn
 const performQuery = (query, params, callback) => {
     console.log("Đang lấy kết nối từ pool...");
-    
-    // Lấy kết nối từ pool
+
+    // Lấy kết nối từ pool một lần duy nhất
     pool.getConnection((err, connection) => {
         if (err) {
             console.error("Lỗi khi kết nối tới cơ sở dữ liệu:", err);
@@ -23,7 +23,7 @@ const performQuery = (query, params, callback) => {
             return;
         }
 
-        console.log("Kết nối thành công!");
+        console.log("Kết nối thành công từ pool!");
 
         // Thực hiện truy vấn
         connection.query(query, params, (err, results) => {
