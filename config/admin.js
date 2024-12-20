@@ -1,8 +1,7 @@
-const db = require('./db');
-
+const { performQuery } = require('./db'); 
 const createAdmin = (username, passwordHash, role) => {
     return new Promise((resolve, reject) => {
-        db.query(
+        performQuery(
             "INSERT INTO admin (Username, PasswordHash, Role) VALUES (?, ?, ?)",
             [username, passwordHash, role],
             (err, result) => {
