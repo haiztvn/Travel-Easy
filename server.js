@@ -759,52 +759,53 @@ app.post("/api/login", (req, res) => {
   }
 
   // Tìm người dùng trong database
-  const sql = "SELECT * FROM account WHERE AccountName = ?";
-  performQuery(sql, [AccountName], (err, results) => {
+ const sql = "SELECT * FROM account WHERE AccountName = ?";
+performQuery(sql, [AccountName], (err, results) => {
     if (err) {
-      console.error("Lỗi khi tìm người dùng:", err);
-      return res.status(500).json({ error: "Lỗi khi tìm người dùng" });
+        console.error("Lỗi khi tìm người dùng:", err);
+        return res.status(500).json({ error: "Lỗi khi tìm người dùng" });
     }
 
     if (results.length === 0) {
-      return res.status(401).json({ error: "Thông tin đăng nhập không chính xác" });
+        return res.status(401).json({ error: "Thông tin đăng nhập không chính xác" });
     }
 
     const user = results[0];
 
     // Kiểm tra mật khẩu
     bcrypt.compare(AccountPassword, user.AccountPassword, (err, isMatch) => {
-      if (err) {
-        console.error("Lỗi khi so sánh mật khẩu:", err);
-        return res.status(500).json({ error: "Lỗi khi so sánh mật khẩu" });
-      }
+        if (err) {
+            console.error("Lỗi khi so sánh mật khẩu:", err);
+            return res.status(500).json({ error: "Lỗi khi so sánh mật khẩu" });
+        }
 
-      if (!isMatch) {
-        return res.status(401).json({ error: "Thông tin đăng nhập không chính xác" });
-      }
+        if (!isMatch) {
+            return res.status(401).json({ error: "Thông tin đăng nhập không chính xác" });
+        }
 
-      // Tạo JWT token sau khi xác thực thành công
-      const payload = {
-        ID: user.ID,
-        AccountName: user.AccountName,
-        Role: user.Role,
-        Mail: user.Mail,  // Thêm quyền hạn nếu cần thiết
-      };
+        // Tạo JWT token
+        const payload = {
+            ID: user.ID,
+            AccountName: user.AccountName,
+            Role: user.Role,
+            Mail: user.Mail,  // Thêm quyền hạn nếu cần thiết
+        };
 
-      const token = jwt.sign(payload, secretKey, { expiresIn: '1h' }); // Tạo token với thời gian sống 1 giờ
+        const token = jwt.sign(payload, secretKey, { expiresIn: '1h' }); // Tạo token với thời gian sống 1 giờ
 
-      // Trả về thông tin người dùng và token
-      res.status(200).json({
-        message: "Đăng nhập thành công",
-        user: {
-          ID: user.ID,
-          AccountName: user.AccountName,
-          Mail: user.Mail,
-        },
-        token, // Gửi JWT token về client
-      });
+        // Trả về thông tin người dùng và token
+        res.status(200).json({
+            message: "Đăng nhập thành công",
+            user: {
+                ID: user.ID,
+                AccountName: user.AccountName,
+                Mail: user.Mail,
+            },
+            token, // Gửi JWT token về client
+        });
     });
-  });
+});
+
 });
 app.put("/api/account/:id/trangthai", (req, res) => {
   const accountId = req.params.id;
