@@ -338,15 +338,18 @@ app.post("/api/quocgia", (req, res) => {
 
 ///
 app.get("/api/Khachhang", (req, res) => {
-  // Thực hiện truy vấn tới cơ sở dữ liệu để lấy dữ liệu
-  performQuery("SELECT * FROM khachhang", (err, result) => {
-    if (err) {
-      res.status(500).json({ error: err.message });
-    } else {
-      res.json(result);
-    }
-  });
+    performQuery("SELECT * FROM khachhang", [], (err, result) => {
+        if (res.headersSent) return; // Đảm bảo không gửi phản hồi nhiều lần
+
+        if (err) {
+            console.error("Error fetching customers:", err.message);
+            res.status(500).json({ error: "Database query failed." });
+        } else {
+            res.json(result);
+        }
+    });
 });
+
 app.get("/api/Khachhang/login", authenticateJWT, (req, res) => {
   const userId = req.user.ID; // Lấy ID người dùng từ JWT token
 
