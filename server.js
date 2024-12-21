@@ -1180,18 +1180,21 @@ app.post('/upload', upload.array('images', 5), (req, res) => {
 
 // API lấy tất cả bài viết
 app.get('/get-posts', (req, res) => {
-  const query = 'SELECT * FROM baiviet'; // Truy vấn lấy tất cả bài viết
+    const query = 'SELECT * FROM baiviet'; // Truy vấn lấy tất cả bài viết
 
-  performQuery(query, (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Lỗi khi lấy dữ liệu bài viết');
-    }
+    performQuery(query, (err, result) => {
+        if (res.headersSent) return; // Tránh gửi phản hồi nhiều lần
 
-    // Trả về tất cả bài viết dưới dạng JSON
-    res.json(result);
-  });
+        if (err) {
+            console.error("Error fetching posts:", err.message);
+            return res.status(500).send('Lỗi khi lấy dữ liệu bài viết');
+        }
+
+        // Trả về tất cả bài viết dưới dạng JSON
+        res.json(result);
+    });
 });
+
 app.get('/get-post/:id', (req, res) => {
   const postId = req.params.id;
 
