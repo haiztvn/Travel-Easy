@@ -15,12 +15,13 @@ const pool = mysql.createPool({
 const performQuery = (query, params, callback) => {
     pool.execute(query, params, (err, results) => {
         if (err) {
-            callback(err, null);
-        } else {
-            callback(null, results);
+            console.error("Database error:", err.message);
+            return callback(err, null);
         }
+        callback(null, results);
     });
 };
+
 
 // Xuất các hàm cần thiết
 module.exports = {
